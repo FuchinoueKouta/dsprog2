@@ -1,5 +1,6 @@
 import flet as ft
 import requests
+import sqlite3
 
 WEATHER_CODES = {
     "100": {"name": "晴れ", "icon": ft.icons.WB_SUNNY},
@@ -49,6 +50,8 @@ def get_weather_data(region_code):
     except Exception as e:
         print(f"その他のエラー (コード: {region_code}): {e}")
         return None
+
+
 
 # 天気カードを作成
 def create_weather_card(date, weather_code, max_temp, min_temp):
@@ -125,7 +128,49 @@ def create_weather_card(date, weather_code, max_temp, min_temp):
         elevation=0,  
     )
 
+
+def create_weather_database():
+    conn = sqlite3.connect("weather_data.db")  # データベースファイルを作成または接続
+    cursor = conn.cursor()
+    
+    # 天気データ用のテーブルを作成
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS weather (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        region_code TEXT NOT NULL,
+        weather_code TEXT NOT NULL,
+        max_temp REAL,
+        min_temp REAL
+    )
+    """)
+    
+    # エリア情報用のテーブル（オプション機能用）
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS regions (
+        region_code TEXT PRIMARY KEY,
+        region_name TEXT NOT NULL
+    )
+    """)
+    
+    conn.commit()
+    conn.close()
+
+def save_weather_data(date, region_code, weather_code, max_temp, min_temp):
+    conn = sqlite3.connect("weather_data.db")  # データベースに接続
+    cursor = conn.cursor()
+    
+    # データを挿入
+    cursor.execute("""
+    INSERT INTO weather (date, region_code, weather_code, max_temp, min_temp)
+    VALUES (?, ?, ?, ?, ?)
+    """, (date, region_code, weather_code, max_temp, min_temp))
+    
+    conn.commit()
+    conn.close()
+
 def main(page: ft.Page):
+    create_weather_database()
     page.title = "天気予報アプリ"
     page.padding = 10
     page.theme_mode = ft.ThemeMode.LIGHT
@@ -189,6 +234,14 @@ def main(page: ft.Page):
         for i in range(len(dates)):
             max_temp = temp_area.get("tempsMax", [None])[i] if "tempsMax" in temp_area else None
             min_temp = temp_area.get("tempsMin", [None])[i] if "tempsMin" in temp_area else None
+            
+            save_weather_data(
+                date=dates[i].split("T")[0],
+                region_code=region_code,
+                weather_code=area["weatherCodes"][i],
+                max_temp=max_temp,
+                min_temp=min_temp
+            )
             
             cards.append(
                 create_weather_card(
